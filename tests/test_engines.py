@@ -36,8 +36,8 @@ def test_hf_space_failure_is_clean():
     def boom(**kw):
         raise RuntimeError("secret detail: quota")
     with pytest.raises(EngineError) as err:
-        HFSpaceEngine("o/s", client=SimpleNamespace(predict=boom)).generate(REQ)
-    assert "secret detail" not in str(err.value)
+        HFSpaceEngine("o/s", token="hf_TOKEN123", client=SimpleNamespace(predict=boom)).generate(REQ)
+    assert "RuntimeError" in str(err.value) and "hf_TOKEN123" not in str(err.value)
 
 
 class FakeSession:
@@ -81,3 +81,44 @@ def test_build_engine_choices():
     assert build_engine(load_settings({}, {"L2P_IMAGE_ENGINE": "remote"})).name == "demo"  # no URL
     e = build_engine(load_settings({}, {"L2P_IMAGE_ENGINE": "remote", "L2P_REMOTE_URL": "https://x", "L2P_REMOTE_TOKEN": "t"}))
     assert e.name == "remote"
+
+
+def test_hf_client_is_lazy_and_uses_token_keyword(monkeypatch):
+    import gradio_client
+
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, src, token=None, max_workers=1):
+            seen.update(src=src, token=token)
+
+    monkeypatch.setattr(gradio_client, "Client", FakeClient)
+    engine = HFSpaceEngine("owner/space", token="hf_x")  # must not call Client yet
+    assert seen == {}
+    engine._get_client()
+    assert seen == {"src": "owner/space", "token": "hf_x"}
+
+
+def test_hf_client_old_keyword_name(monkeypatch):
+    import gradio_client
+
+    seen = {}
+
+    class OldClient:
+        def __init__(self, src, hf_token=None):
+            seen.update(src=src, hf_token=hf_token)
+
+    monkeypatch.setattr(gradio_client, "Client", OldClient)
+    HFSpaceEngine("o/s", token="hf_y")._get_client()
+    assert seen["hf_token"] == "hf_y"
+
+
+def test_hf_construction_failure_falls_back_to_demo(monkeypatch):
+    import gradio_client
+
+    def broken(*a, **k):
+        raise TypeError("no such argument")
+
+    monkeypatch.setattr(gradio_client, "Client", broken)
+    res, fell_back, note = generate_with_fallback(HFSpaceEngine("o/s", token="t"), REQ)
+    assert fell_back and res.engine == "demo" and "TypeError" in note
