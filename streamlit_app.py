@@ -15,6 +15,7 @@ from lyric2poster.art_director import BriefError, build_art_director
 from lyric2poster.charts import load_charts
 from lyric2poster.config import load_settings
 from lyric2poster.image_engines import EngineError, ImageRequest, build_engine, generate_with_fallback
+from lyric2poster.lyrics import build_provider
 from lyric2poster.limits import SessionLimiter, owner_key_allowed, passcode_ok
 from lyric2poster.overlay import add_title_overlay
 from lyric2poster.prompt_builder import build_image_prompt
@@ -113,8 +114,30 @@ def make_brief() -> None:
     st.session_state.pop("poster", None)
 
 
-st.text_area("Paste the lyrics (used once, never saved)", key="lyrics", height=160, max_chars=8000)
+def load_lyrics() -> None:
+    """Fill the lyrics box for the chosen song. Runs again only when the song changes."""
+    provider = build_provider(settings.lyrics_provider)
+    st.session_state["_lyrics_for"] = (title, artist)
+    st.session_state["lyrics_note"] = ""
+    if provider is None or not title or not artist:
+        return
+    found = provider.fetch(title, artist)
+    if found:
+        st.session_state["lyrics"] = found
+        st.session_state["lyrics_note"] = f"Lyrics loaded from {provider.name}. You can edit them. They are erased after the brief."
+    else:
+        st.session_state["lyrics_note"] = "No lyrics found for this song. Please paste your own text."
+
+
+if st.session_state.get("_lyrics_for") != (title, artist):
+    load_lyrics()
+
+st.text_area("Lyrics (used once, never saved)", key="lyrics", height=200, max_chars=8000)
+if st.session_state.get("lyrics_note"):
+    st.caption(st.session_state["lyrics_note"])
 st.button("1. Write the art brief", on_click=make_brief, type="primary")
+if settings.lyrics_provider != "off":
+    st.button("Load lyrics again", on_click=load_lyrics)
 if st.session_state.get("error"):
     st.error(st.session_state["error"])
 
