@@ -64,12 +64,18 @@ def fetch_chart(session: Any, api_key: str, chart: ChartSpec, limit: int) -> dic
         params["country"] = chart.country
     try:
         response = session.get(LASTFM_URL, params=params, timeout=20)
-        response.raise_for_status()
-        data = response.json()
+        status = getattr(response, "status_code", 200)
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
     except Exception as exc:  # noqa: BLE001 - the URL holds the key, so never include it
         raise LastfmError(f"request for chart '{chart.chart_id}' failed ({type(exc).__name__})") from None
+    # Last.fm often answers HTTP 4xx with a JSON body {"error": <code>}; report that code.
     if isinstance(data, dict) and "error" in data:
-        raise LastfmError(f"Last.fm refused chart '{chart.chart_id}' (error {data.get('error')})")
+        raise LastfmError(f"Last.fm refused chart '{chart.chart_id}' (error {data.get('error')}, HTTP {status})")
+    if status >= 400 or not isinstance(data, dict):
+        raise LastfmError(f"request for chart '{chart.chart_id}' failed (HTTP {status})")
     return data
 
 
