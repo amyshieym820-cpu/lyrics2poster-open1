@@ -59,8 +59,10 @@ with st.sidebar:
 unlocked = bool(st.session_state.get("unlocked"))
 anthropic_key = own_claude.strip() or (settings.anthropic_api_key if owner_key_allowed(settings, unlocked) else "")
 openai_key = settings.openai_api_key if owner_key_allowed(settings, unlocked) else ""
+# A key pasted in the sidebar always means Claude, even when no owner key is configured.
+llm = "claude" if own_claude.strip() else settings.llm
 director = build_art_director(
-    settings.llm if (anthropic_key or openai_key) else "demo",
+    llm if (anthropic_key or openai_key) else "demo",
     anthropic_api_key=anthropic_key, openai_api_key=openai_key,
     claude_model=settings.claude_model, openai_model=settings.openai_model,
 )
