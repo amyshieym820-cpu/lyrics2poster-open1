@@ -114,14 +114,25 @@ class HFSpaceEngine:
     def __init__(self, space: str, api_name: str = "/infer", token: str = "", client: Any = None) -> None:
         self.model = space
         self._api_name = api_name
-        if client is None:
+        self._token = token
+        self._client = client  # created on first use, so a Space problem never breaks the whole app
+
+    def _get_client(self) -> Any:
+        if self._client is None:
+            import inspect
+
             from gradio_client import Client
 
-            client = Client(space, hf_token=token or None)
-        self._client = client
+            # gradio_client 2.x renamed hf_token to token; support both.
+            params = inspect.signature(Client.__init__).parameters
+            kwargs = {}
+            if self._token:
+                kwargs["token" if "token" in params else "hf_token"] = self._token
+            self._client = Client(self.model, **kwargs)
+        return self._client
 
     def _predict(self, req: ImageRequest) -> Any:
-        return self._client.predict(
+        return self._get_client().predict(
             prompt=req.prompt,
             seed=req.seed,
             randomize_seed=False,
@@ -142,7 +153,9 @@ class HFSpaceEngine:
         except EngineError:
             raise
         except Exception as exc:  # noqa: BLE001
-            raise EngineError(f"The Hugging Face Space call failed ({type(exc).__name__}). Its GPU quota may be used up.") from None
+            detail = str(exc).replace(self._token, "***") if self._token else str(exc)
+            detail = " ".join(detail.split())[:160]
+            raise EngineError(f"The Hugging Face Space call failed ({type(exc).__name__}: {detail}).") from None
         return EngineResult(png=png, engine=self.name, model=self.model)
 
 
