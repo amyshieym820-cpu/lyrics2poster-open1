@@ -59,3 +59,20 @@ def test_owner_key_not_used_without_passcode(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-owner")
     at = AppTest.from_file(APP, default_timeout=60).run()
     assert "demo" in at.caption[0].value  # the owner's key stays unused for strangers
+
+
+def test_pasted_key_switches_to_claude_even_without_owner_key():
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    assert "demo" in at.caption[0].value
+    at.text_input(key="byo_claude").set_value("sk-ant-test").run()
+    assert not at.exception
+    assert "claude" in at.caption[0].value
+
+
+def test_owner_key_with_passcode_uses_claude(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-owner")
+    monkeypatch.setenv("APP_PASSCODE", "letmein")
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    assert "demo" in at.caption[0].value
+    at.text_input(key="passcode_input").set_value("letmein").run()
+    assert "claude" in at.caption[0].value
