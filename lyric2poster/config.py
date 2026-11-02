@@ -37,6 +37,8 @@ class Settings:
     allow_public_owner_key: bool = False
     brief_limit: int = 10
     poster_limit: int = 6
+    # Lyrics lookup: lrclib | off
+    lyrics_provider: str = "lrclib"
     # Charts
     charts_dir: str = "data/charts"
     charts_url: str = ""  # e.g. https://raw.githubusercontent.com/<user>/<repo>/main/data/charts
@@ -94,6 +96,7 @@ def load_settings(secrets: Optional[Mapping[str, object]] = None, env: Optional[
         allow_public_owner_key=_bool(get("L2P_ALLOW_PUBLIC_OWNER_KEY"), False),
         brief_limit=num("L2P_BRIEF_LIMIT", 10),
         poster_limit=num("L2P_POSTER_LIMIT", 6),
+        lyrics_provider=("off" if get("L2P_LYRICS_PROVIDER", "lrclib").lower() != "lrclib" else "lrclib"),
         charts_dir=get("L2P_CHARTS_DIR", "data/charts"),
         charts_url=get("L2P_CHARTS_URL").rstrip("/"),
     )
