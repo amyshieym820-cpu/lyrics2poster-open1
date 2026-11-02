@@ -12,6 +12,7 @@ APP = str(Path(__file__).resolve().parent.parent / "streamlit_app.py")
 
 @pytest.fixture(autouse=True)
 def demo_env(monkeypatch):
+    monkeypatch.setenv("L2P_LYRICS_PROVIDER", "off")
     for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "L2P_LLM", "L2P_IMAGE_ENGINE", "APP_PASSCODE", "HF_TOKEN"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.chdir(Path(APP).parent)
@@ -76,3 +77,40 @@ def test_owner_key_with_passcode_uses_claude(monkeypatch):
     assert "demo" in at.caption[0].value
     at.text_input(key="passcode_input").set_value("letmein").run()
     assert "claude" in at.caption[0].value
+
+
+def test_lyrics_autofill_then_erased_after_brief(monkeypatch, caplog):
+    import lyric2poster.lyrics as lyr
+
+    class Fake:
+        name = "fake"
+
+        def fetch(self, title, artist):
+            return LYRICS
+
+    monkeypatch.setenv("L2P_LYRICS_PROVIDER", "lrclib")
+    monkeypatch.setattr(lyr, "build_provider", lambda name: Fake())
+    caplog.set_level(logging.DEBUG)
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    assert not at.exception
+    assert at.text_area(key="lyrics").value == LYRICS  # shown without pasting
+    at.button[0].click().run()
+    assert not at.exception and "brief" in at.session_state
+    assert at.session_state["lyrics"] == ""
+    assert CANARY not in repr(dict(at.session_state)) + caplog.text
+
+
+def test_lyrics_not_found_shows_note(monkeypatch):
+    import lyric2poster.lyrics as lyr
+
+    class Nope:
+        name = "fake"
+
+        def fetch(self, title, artist):
+            return None
+
+    monkeypatch.setenv("L2P_LYRICS_PROVIDER", "lrclib")
+    monkeypatch.setattr(lyr, "build_provider", lambda name: Nope())
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    assert at.text_area(key="lyrics").value == ""
+    assert any("No lyrics found" in c.value for c in at.caption)

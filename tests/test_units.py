@@ -102,3 +102,34 @@ def test_limiter_and_passcode():
     assert not owner_key_allowed(s2, unlocked=False)  # no passcode and no explicit opt-in
     s3 = load_settings(secrets={"ANTHROPIC_API_KEY": "k", "L2P_ALLOW_PUBLIC_OWNER_KEY": "true"}, env={})
     assert owner_key_allowed(s3, unlocked=False)
+
+
+def test_lrclib_provider_parsing_and_failures():
+    from types import SimpleNamespace
+    from lyric2poster.lyrics import LrclibProvider, build_provider
+
+    def resp(payload, status=200):
+        return SimpleNamespace(status_code=status, json=lambda: payload)
+
+    items = [{"instrumental": True, "plainLyrics": "x" * 50},
+             {"plainLyrics": ""},
+             {"plainLyrics": "first line of an original test text\nsecond line of the text"}]
+    asked = {}
+
+    def get(url, params=None, headers=None, timeout=0):
+        asked.update(url=url, params=params)
+        return resp(items)
+
+    out = LrclibProvider(get=get).fetch("T", "A")
+    assert out.startswith("first line") and asked["params"] == {"track_name": "T", "artist_name": "A"}
+    assert LrclibProvider(get=lambda *a, **k: resp([], 200)).fetch("T", "A") is None
+    assert LrclibProvider(get=lambda *a, **k: resp(items, 500)).fetch("T", "A") is None
+    assert LrclibProvider(get=lambda *a, **k: resp({"oops": 1})).fetch("T", "A") is None
+
+    def boom(*a, **k):
+        raise RuntimeError("secret")
+    assert LrclibProvider(get=boom).fetch("T", "A") is None
+    assert LrclibProvider(get=get).fetch("", "A") is None
+    long = [{"plainLyrics": "word " * 5000}]
+    assert len(LrclibProvider(get=lambda *a, **k: resp(long)).fetch("T", "A")) <= 8000
+    assert build_provider("off") is None and build_provider("lrclib").name == "lrclib"
