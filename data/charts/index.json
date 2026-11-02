@@ -6,6 +6,12 @@
   "count": 50
  },
  {
+  "chart_id": "korea-republic-of",
+  "label": "Top tracks: Korea, Republic of",
+  "fetched_at": "2026-11-02T10:02:33+00:00",
+  "count": 50
+ },
+ {
   "chart_id": "sample-fictional",
   "label": "Sample chart (fictional songs, for tests)",
   "fetched_at": "2026-11-02T00:00:00+00:00",
